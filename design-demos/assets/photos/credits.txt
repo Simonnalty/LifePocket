@@ -1,0 +1,5 @@
+photo1.jpg | File:Mount Fuji at sunset, March 2025.jpg | https://commons.wikimedia.org/wiki/File:Mount_Fuji_at_sunset,_March_2025.jpg
+photo2.jpg | File:A coffee cup featuring intricate latte art sits on a wooden table next to an open laptop.jpg | https://commons.wikimedia.org/wiki/File:A_coffee_cup_featuring_intricate_latte_art_sits_on_a_wooden_table_next_to_an_open_laptop.jpg
+photo3.jpg | File:Kimono Forest at night, Arashiyama Station, Arashiyama, Kyoto, Japan.jpg | https://commons.wikimedia.org/wiki/File:Kimono_Forest_at_night,_Arashiyama_Station,_Arashiyama,_Kyoto,_Japan.jpg
+photo4.jpg | File:Krishansar Lake, Sonmarg, Kashmir valley, India 01.jpg | https://commons.wikimedia.org/wiki/File:Krishansar_Lake,_Sonmarg,_Kashmir_valley,_India_01.jpg
+photo5.jpg | File:Old-fashioned analog camera on an old book closeup.jpg | https://commons.wikimedia.org/wiki/File:Old-fashioned_analog_camera_on_an_old_book_closeup.jpg

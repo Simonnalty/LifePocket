@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>口袋管家 LifePocket · 方向B 晨光账本</title>
+
+  <!-- React + Babel pinned（照 react-setup.md 原文） -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- Noto Sans SC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; min-height: 100%; }
+    body {
+      background: #F3EFE4;
+      color: #22211E;
+      font-family: 'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #root { min-height: 100vh; }
+    button { cursor: pointer; }
+    input { outline: none; }
+
+    /* 手机内滚动区隐藏滚动条 */
+    .paperScroll { scrollbar-width: none; }
+    .paperScroll::-webkit-scrollbar { width: 0; height: 0; }
+
+    /* 账本格线（明细屏签名质感）：极淡横向格线 */
+    .paperLedgerGrid {
+      background-image: repeating-linear-gradient(to bottom,
+        rgba(34,33,30,0.055) 0px, rgba(34,33,30,0.055) 1px, transparent 1px, transparent 34px);
+    }
+
+    /* 展示板底板格线：更淡的账本格 */
+    .boardGrid {
+      background-image:
+        repeating-linear-gradient(to bottom, rgba(34,33,30,0.045) 0px, rgba(34,33,30,0.045) 1px, transparent 1px, transparent 44px),
+        repeating-linear-gradient(to right, rgba(34,33,30,0.03) 0px, rgba(34,33,30,0.03) 1px, transparent 1px, transparent 44px);
+    }
+
+    /* 统计条 hover 提亮 */
+    .paperBarRow { transition: background 0.15s ease; }
+    .paperBarRow:hover { background: rgba(46,110,78,0.07); }
+    .paperBarFill { transition: filter 0.15s ease; }
+    .paperBarFill:hover { filter: brightness(1.22) saturate(1.15); }
+
+    /* 通用 hover */
+    .paperFab:hover { filter: brightness(1.09); transform: translateY(-1px); }
+    .paperIconBtn:hover { border-color: #2E6E4E !important; color: #2E6E4E !important; }
+    .paperChip:hover { border-color: rgba(46,110,78,0.55); }
+    .paperTabBtn:hover { background: rgba(46,110,78,0.05); }
+    .paperTaskHead:hover { background: rgba(46,110,78,0.04); }
+    .paperArrowBtn:hover { border-color: #2E6E4E; color: #2E6E4E; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    /* ==========================================================
+       方向 B「晨光账本」设计系统
+       暖纸白 #F7F4EC / 墨黑 #22211E / 账本绿 #2E6E4E / 卡片描边 #E5E0D3
+       ========================================================== */
+    const C = {
+      paper: '#F7F4EC',      // 暖纸白底
+      board: '#F3EFE4',      // 展示板底
+      ink: '#22211E',        // 墨黑文字
+      sub: '#8A857A',        // 弱化墨色
+      green: '#2E6E4E',      // 账本绿主色
+      greenSoft: 'rgba(46,110,78,0.10)',
+      card: '#FFFFFF',       // 卡片纯白
+      border: '#E5E0D3',     // 卡片描边
+      hairline: '#F0EBDF',   // 卡内细分隔线
+      field: '#FBF9F3',      // 输入/纸片底
+      mute: '#A39D8F',       // 更弱文字
+    };
+
+    /* 唯一命名 styles 对象：paperStyles */
+    const paperStyles = {
+      appRoot: {
+        height: '100%', display: 'flex', flexDirection: 'column',
+        position: 'relative', background: C.paper, color: C.ink,
+        fontFamily: "'Noto Sans SC', -apple-system, 'PingFang SC', sans-serif",
+      },
+      screenBody: { flex: 1, overflowY: 'auto', background: C.paper },
+      tabBar: {
+        height: 62, background: C.card, borderTop: '1px solid ' + C.border,
+        display: 'flex', flexShrink: 0,
+      },
+      fab: {
+        position: 'absolute', right: 18, bottom: 80, width: 54, height: 54,
+        borderRadius: '50%', background: C.green, color: '#FFFFFF',
+        border: 'none', cursor: 'pointer', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', fontSize: 26,
+        fontWeight: 600, boxShadow: '0 10px 24px rgba(46,110,78,0.38)',
+        zIndex: 20, fontFamily: 'inherit',
+        transition: 'transform .15s ease, filter .15s ease',
+      },
+      card: {
+        background: C.card, border: '1px solid ' + C.border,
+        borderRadius: 16, boxShadow: '0 2px 10px rgba(34,33,30,0.05)',
+      },
+      emojiChip: {
+        width: 40, height: 40, borderRadius: 12, background: C.field,
+        border: '1px solid ' + C.border, display: 'flex',
+        alignItems: 'center', justifyContent: 'center', fontSize: 19,
+        flexShrink: 0,
+      },
+      chip: {
+        padding: '7px 14px', borderRadius: 999, border: '1px solid ' + C.border,
+        background: C.card, fontSize: 13, fontWeight: 600, color: C.ink,
+        cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s ease',
+      },
+      chipActive: {
+        background: C.greenSoft, border: '1px solid ' + C.green,
+        color: C.green, fontWeight: 800,
+      },
+      chipDashed: { borderStyle: 'dashed', color: C.sub, background: 'transparent' },
+      num: { fontVariantNumeric: 'tabular-nums' },
+      sectionLabel: { fontSize: 11, fontWeight: 800, color: C.sub, letterSpacing: 2, margin: '16px 2px 8px' },
+      backdrop: {
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        background: 'rgba(34,33,30,0.45)', zIndex: 40,
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+      },
+      sheet: {
+        background: C.card, borderRadius: '22px 22px 0 0',
+        padding: '18px 20px 22px', maxHeight: '90%', overflowY: 'auto',
+        boxShadow: '0 -10px 40px rgba(34,33,30,0.25)',
+      },
+      fieldBox: {
+        display: 'flex', alignItems: 'center', gap: 12, background: C.field,
+        border: '1px solid ' + C.border, borderRadius: 12,
+        padding: '12px 14px', marginTop: 10,
+      },
+      primaryBtn: {
+        width: '100%', height: 48, borderRadius: 13, background: C.green,
+        color: '#FFFFFF', fontSize: 16, fontWeight: 800, border: 'none',
+        cursor: 'pointer', fontFamily: 'inherit', marginTop: 16, letterSpacing: 6,
+      },
+    };
+
+    /* ==========================================================
+       演示数据（全部来自需求，不另编数据）
+       ========================================================== */
+    const money = (n) => '¥' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const DAYS = [
+      {
+        date: '11月19日', tag: '今天', subtotal: 48.50, rows: [
+          { icon: '🍗', title: '午饭 · 黄焖鸡', cat: '吃🍗 / 午饭', amt: 28.50 },
+          { icon: '🍗', title: '奶茶 · 茉莉奶绿', cat: '吃🍗 / 奶茶', amt: 16.00 },
+          { icon: '🚗', title: '地铁', cat: '行🚗 / 地铁', amt: 4.00 },
+        ],
+      },
+      {
+        date: '11月18日', tag: '昨天', subtotal: 244.60, rows: [
+          { icon: '👕', title: '卫衣 · 优衣库', cat: '穿👕 / 上衣', amt: 199.00 },
+          { icon: '📚', title: '书 ·《置身事内》', cat: '学习📚 / 买书', amt: 45.60 },
+        ],
+      },
+      {
+        date: '11月17日', tag: '', subtotal: 1976.10, rows: [
+          { icon: '🏠', title: '房租', cat: '住🏠 / 房租', amt: 1850.00 },
+          { icon: '🏠', title: '电费', cat: '住🏠 / 水电', amt: 86.20 },
+          { icon: '🏠', title: '洗衣液', cat: '住🏠 / 日用', amt: 39.90 },
+        ],
+      },
+      {
+        date: '11月16日', tag: '', subtotal: 137.50, rows: [
+          { icon: '📚', title: '网课 · 英语口语', cat: '学习📚 / 网课', amt: 99.00 },
+          { icon: '🚗', title: '打车', cat: '行🚗 / 打车', amt: 23.50 },
+          { icon: '🍗', title: '午饭 · 食堂', cat: '吃🍗 / 午饭', amt: 15.00 },
+        ],
+      },
+      {
+        date: '11月15日', tag: '', income: true, rows: [
+          { icon: '🧧', title: '红包 · 生日', cat: '收入 / 红包', amt: 88.80, income: true },
+        ],
+      },
+      {
+        date: '11月10日', tag: '', income: true, rows: [
+          { icon: '💰', title: '工资', cat: '收入 / 工资', amt: 8500.00, income: true },
+        ],
+      },
+    ];
+
+    const TASKS_INIT = [
+      {
+        id: 'move', title: '十一月搬家准备', items: [
+          { t: '联系搬家公司', done: true },
+          { t: '清点行李', done: true },
+          { t: '买打包纸箱', done: true },
+          { t: '退租报备', done: false },
+          { t: '新家开通宽带', done: false },
+        ],
+      },
+      {
+        id: 'english', title: '英语学习计划', items: [
+          { t: '每日背30词', done: true },
+          { t: '精读1篇外刊', done: true },
+          { t: '口语跟读15分钟', done: false },
+          { t: '周末模考', done: false },
+        ],
+      },
+      {
+        id: 'gym', title: '健身回归', items: [
+          { t: '办健身卡', done: true },
+          { t: '周二 · 练背', done: false },
+          { t: '周五 · 练腿', done: false },
+        ],
+      },
+    ];
+
+    /* 胶片照片 token：之后会被替换成 base64，勿改成相对路径 */
+    const PHOTOS = [
+      { token: '__PHOTO_latte__', name: '拿铁' },
+      { token: '__PHOTO_cat__', name: '猫' },
+      { token: '__PHOTO_street__', name: '街角' },
+      { token: '__PHOTO_mountain__', name: '远山' },
+      { token: '__PHOTO_ramen__', name: '拉面' },
+      { token: '__PHOTO_books__', name: '书桌' },
+    ];
+
+    const STATS_CATS = [
+      { icon: '🏠', name: '住', pct: 80.2 },
+      { icon: '👕', name: '穿', pct: 8.1 },
+      { icon: '📚', name: '学习', pct: 5.9 },
+      { icon: '🍗', name: '吃', pct: 4.7 },
+      { icon: '🚗', name: '行', pct: 1.1 },
+    ];
+
+    const CATS = ['吃🍗', '穿👕', '住🏠', '行🚗', '学习📚'];
+    const SUBS = ['午饭', '奶茶', '买菜', '地铁'];
+
+    const TABS = [
+      { id: 'ledger', label: '记账', icon: '🧾' },
+      { id: 'tasks', label: '任务', icon: '✅' },
+      { id: 'film', label: '胶片', icon: '🎞️' },
+      { id: 'settings', label: '设置', icon: '⚙️' },
+    ];
+
+    /* ==========================================================
+       AndroidFrame — 安卓手机外壳（原样复制自 android_frame.jsx）
+       ========================================================== */
+    const androidFrameStyles = {
+      wrapper: {
+        display: 'inline-block',
+        padding: 10,
+        background: '#1a1a1a',
+        borderRadius: 44,
+        boxShadow: '0 0 0 2px #2a2a2a, 0 20px 60px rgba(0,0,0,0.3)',
+        position: 'relative',
+      },
+      screen: {
+        position: 'relative',
+        borderRadius: 36,
+        overflow: 'hidden',
+        background: '#fff',
+      },
+      statusBar: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 32,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 24px',
+        fontSize: 14,
+        fontWeight: 500,
+        fontFamily: 'Roboto, -apple-system, sans-serif',
+        zIndex: 20,
+        pointerEvents: 'none',
+      },
+      punchHole: {
+        position: 'absolute',
+        top: 10,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 14,
+        height: 14,
+        background: '#000',
+        borderRadius: '50%',
+        zIndex: 30,
+      },
+      statusIcons: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+      },
+      batteryText: {
+        fontSize: 11,
+        fontWeight: 600,
+        marginLeft: 2,
+      },
+      content: {
+        position: 'absolute',
+        top: 32,
+        left: 0,
+        right: 0,
+        bottom: 24,
+        overflow: 'auto',
+      },
+      navBar: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 24,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 60,
+        zIndex: 10,
+      },
+      navButton: {
+        width: 36,
+        height: 4,
+        background: 'rgba(0,0,0,0.3)',
+        borderRadius: 999,
+      },
+    };
+
+    function AndroidFrame({
+      children,
+      width = 412,
+      height = 892,
+      time = '9:41',
+      battery = 100,
+      darkMode = false,
+      navStyle = 'gesture',
+    }) {
+      const textColor = darkMode ? '#fff' : '#1a1a1a';
+
+      return (
+        <div style={androidFrameStyles.wrapper}>
+          <div style={{
+            ...androidFrameStyles.screen,
+            width,
+            height,
+            background: darkMode ? '#000' : '#fff',
+          }}>
+            <div style={{ ...androidFrameStyles.statusBar, color: textColor }}>
+              <span>{time}</span>
+              <div style={androidFrameStyles.statusIcons}>
+                <svg width="14" height="10" viewBox="0 0 14 10" fill="currentColor">
+                  <rect x="0" y="6" width="2" height="4" rx="0.5" />
+                  <rect x="4" y="4" width="2" height="6" rx="0.5" />
+                  <rect x="8" y="2" width="2" height="8" rx="0.5" />
+                  <rect x="12" y="0" width="2" height="10" rx="0.5" />
+                </svg>
+                <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+                  <path d="M7 9a1 1 0 100-2 1 1 0 000 2z" fill="currentColor" />
+                  <path d="M3 6a5 5 0 018 0" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M0.5 3.5a11 11 0 0113 0" stroke="currentColor" strokeWidth="1.2" opacity="0.6" />
+                </svg>
+                <div style={{
+                  width: 22,
+                  height: 10,
+                  border: '1.5px solid currentColor',
+                  borderRadius: 2,
+                  padding: 1,
+                  position: 'relative',
+                }}>
+                  <div style={{
+                    width: `${battery}%`,
+                    height: '100%',
+                    background: 'currentColor',
+                    borderRadius: 1,
+                  }} />
+                </div>
+                <span style={androidFrameStyles.batteryText}>{battery}%</span>
+              </div>
+            </div>
+
+            <div style={androidFrameStyles.punchHole} />
+
+            <div style={androidFrameStyles.content}>
+              {children}
+            </div>
+
+            {navStyle === 'gesture' && (
+              <div style={androidFrameStyles.navBar}>
+                <div style={{
+                  ...androidFrameStyles.navButton,
+                  width: 100,
+                  height: 4,
+                  background: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)',
+                }} />
+              </div>
+            )}
+
+            {navStyle === 'buttons' && (
+              <div style={androidFrameStyles.navBar}>
+                <span style={{ color: textColor, fontSize: 20 }}>◁</span>
+                <span style={{ color: textColor, fontSize: 16 }}>○</span>
+                <span style={{ color: textColor, fontSize: 16 }}>□</span>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (typeof window !== 'undefined') {
+      window.AndroidFrame = AndroidFrame;
+    }
+
+    /* ==========================================================
+       通用小组件
+       ========================================================== */
+    function TabBar({ tab, onChange }) {
+      return (
+        <div style={paperStyles.tabBar}>
+          {TABS.map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                className="paperTabBtn"
+                onClick={() => onChange(t.id)}
+                style={{
+                  flex: 1, border: 'none', background: 'transparent',
+                  fontFamily: 'inherit', paddingTop: 9, paddingBottom: 7,
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', gap: 3, position: 'relative',
+                  transition: 'background .15s ease',
+                }}
+              >
+                {active && (
+                  <div style={{ position: 'absolute', top: 0, width: 22, height: 3, borderRadius: 999, background: C.green }} />
+                )}
+                <span style={{ fontSize: 17, filter: active ? 'none' : 'grayscale(1)', opacity: active ? 1 : 0.55 }}>{t.icon}</span>
+                <span style={{ fontSize: 11, fontWeight: active ? 800 : 500, color: active ? C.green : C.sub, letterSpacing: 2 }}>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    function Fab({ onClick, title }) {
+      return <button title={title} onClick={onClick} className="paperFab" style={paperStyles.fab}>＋</button>;
+    }
+
+    function Toast({ msg }) {
+      return (
+        <div style={{
+          position: 'absolute', bottom: 92, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(34,33,30,0.92)', color: '#FFFFFF', fontSize: 12,
+          fontWeight: 600, padding: '9px 16px', borderRadius: 999, zIndex: 80,
+          whiteSpace: 'nowrap', boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+        }}>{msg}</div>
+      );
+    }
+
+    function SectionCard({ title, children }) {
+      return (
+        <div style={{ ...paperStyles.card, borderRadius: 16, padding: '14px 18px 6px', marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, letterSpacing: 2, marginBottom: 4 }}>{title}</div>
+          {children}
+        </div>
+      );
+    }
+
+    function SetRow({ label, sub, value, right }) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderTop: '1px solid ' + C.hairline }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{label}</div>
+            {sub && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>{sub}</div>}
+          </div>
+          {right || <div style={{ fontSize: 13, fontWeight: 700, color: C.sub, ...paperStyles.num }}>{value}</div>}
+        </div>
+      );
+    }
+
+    function MiniStat({ label, value }) {
+      return (
+        <div style={{ flex: 1, background: C.card, border: '1px solid ' + C.border, borderRadius: 12, padding: '10px 10px', minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, color: C.sub, fontWeight: 700, whiteSpace: 'nowrap' }}>{label}</div>
+          <div style={{ fontSize: 14, fontWeight: 800, marginTop: 3, whiteSpace: 'nowrap', ...paperStyles.num }}>{value}</div>
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       屏 1：记账明细（默认屏）
+       ========================================================== */
+    function LedgerList({ onOpenStats }) {
+      return (
+        <div style={{ paddingBottom: 104 }}>
+          {/* 月份头 */}
+          <div style={{ padding: '16px 20px 4px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 1 }}>11月</div>
+            <div style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>共 12 笔 · 本机账本</div>
+          </div>
+
+          {/* 月汇总封面卡：大数字 + 细分隔线 */}
+          <div style={{ ...paperStyles.card, margin: '8px 16px 4px', padding: '16px 20px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: C.sub, letterSpacing: 3 }}>11月 · 月汇总</span>
+              <button onClick={onOpenStats} style={{ border: 'none', background: 'transparent', color: C.green, fontSize: 12.5, fontWeight: 800, fontFamily: 'inherit' }}>查看统计 →</button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 10 }}>
+              <span style={{ fontSize: 13, color: C.sub, fontWeight: 700 }}>支出</span>
+              <span style={{ fontSize: 38, fontWeight: 900, letterSpacing: '-0.5px', ...paperStyles.num }}>¥2,463.00</span>
+            </div>
+            <div style={{ height: 1, background: C.border, margin: '12px 0 10px' }} />
+            <div style={{ display: 'flex' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>收入</div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: C.green, marginTop: 2, ...paperStyles.num }}>¥8,588.80</div>
+              </div>
+              <div style={{ width: 1, background: C.border, margin: '0 14px' }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>结余</div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: C.green, marginTop: 2, ...paperStyles.num }}>+¥6,125.80</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 按天分组明细 */}
+          {DAYS.map((day) => (
+            <div key={day.date} style={{ margin: '10px 16px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '6px 6px' }}>
+                <span style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>
+                  {day.date}{day.tag ? ' · ' + day.tag : ''}
+                </span>
+                {day.income ? (
+                  <span style={{ fontSize: 12, fontWeight: 800, color: C.green, ...paperStyles.num }}>收入 +{money(day.rows[0].amt)}</span>
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.sub, ...paperStyles.num }}>小计 {money(day.subtotal)}</span>
+                )}
+              </div>
+              <div style={{ ...paperStyles.card, overflow: 'hidden' }}>
+                {day.rows.map((r, i) => (
+                  <div key={r.title} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderTop: i ? '1px solid ' + C.hairline : 'none' }}>
+                    <div style={paperStyles.emojiChip}>{r.icon}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>{r.title}</div>
+                      <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>{r.cat}</div>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: r.income ? C.green : C.ink, ...paperStyles.num }}>
+                      {r.income ? '+' + money(r.amt) : money(r.amt)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       屏 5：统计（从封面卡进入）
+       ========================================================== */
+    function StatsScreen({ onBack }) {
+      return (
+        <div style={{ padding: '14px 16px 96px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <button onClick={onBack} className="paperIconBtn" style={{ width: 34, height: 34, borderRadius: '50%', background: C.card, border: '1px solid ' + C.border, fontSize: 16, color: C.ink, fontFamily: 'inherit', lineHeight: 1, flexShrink: 0 }}>←</button>
+            <div style={{ fontSize: 17, fontWeight: 900 }}>11月统计</div>
+            <div style={{ flex: 1 }} />
+            <div style={{ fontSize: 11.5, color: C.sub }}>按支出金额统计</div>
+          </div>
+
+          <div style={{ ...paperStyles.card, padding: '16px 18px 12px' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, letterSpacing: 3 }}>11月支出</div>
+            <div style={{ fontSize: 36, fontWeight: 900, marginTop: 4, ...paperStyles.num }}>¥2,463.00</div>
+            <div style={{ height: 1, background: C.border, margin: '12px 0 10px' }} />
+            <div style={{ display: 'flex' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>收入</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.green, marginTop: 2, ...paperStyles.num }}>¥8,588.80</div>
+              </div>
+              <div style={{ width: 1, background: C.border, margin: '0 12px' }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>结余</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: C.green, marginTop: 2, ...paperStyles.num }}>+¥6,125.80</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <MiniStat label="记录笔数" value="12 笔" />
+            <MiniStat label="日均支出" value="¥123.15" />
+            <MiniStat label="最大单笔 · 房租" value="¥1,850.00" />
+          </div>
+
+          <div style={{ ...paperStyles.card, padding: '14px 10px 8px', marginTop: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 900, padding: '0 8px 4px' }}>各大类占比</div>
+            {STATS_CATS.map((c) => (
+              <div key={c.name} className="paperBarRow" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 8px', borderRadius: 10 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 9, background: C.field, border: '1px solid ' + C.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>{c.icon}</div>
+                <div style={{ width: 40, fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{c.name}</div>
+                <div style={{ flex: 1, height: 10, background: '#EFEAE0', borderRadius: 999, overflow: 'hidden' }}>
+                  <div className="paperBarFill" style={{ width: c.pct + '%', minWidth: 8, height: '100%', background: C.green, borderRadius: 999 }} />
+                </div>
+                <div style={{ width: 50, textAlign: 'right', fontSize: 13, fontWeight: 800, flexShrink: 0, ...paperStyles.num }}>{c.pct}%</div>
+              </div>
+            ))}
+            <div style={{ fontSize: 11, color: C.sub, padding: '8px 8px 6px' }}>共 12 笔 · 日均 ¥123.15 · 占比按 11 月支出 ¥2,463.00 计算</div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       屏 3：任务
+       ========================================================== */
+    function TaskCard({ task, expanded, onToggleExpand, onToggleItem }) {
+      const done = task.items.filter((i) => i.done).length;
+      const total = task.items.length;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      return (
+        <div style={{ ...paperStyles.card, marginBottom: 12, overflow: 'hidden' }}>
+          <button
+            className="paperTaskHead"
+            onClick={onToggleExpand}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+              padding: '14px 16px 12px', background: 'transparent', border: 'none',
+              fontFamily: 'inherit', textAlign: 'left', transition: 'background .15s ease',
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>{task.title}</div>
+              <div style={{ height: 5, background: '#EFEAE0', borderRadius: 999, marginTop: 9, overflow: 'hidden' }}>
+                <div style={{ width: pct + '%', height: '100%', background: C.green, borderRadius: 999, transition: 'width .25s ease' }} />
+              </div>
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: C.green, ...paperStyles.num }}>{done}/{total}</div>
+            <span style={{ fontSize: 12, color: C.sub, transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .2s ease' }}>▾</span>
+          </button>
+          {expanded && (
+            <div style={{ padding: '2px 16px 10px' }}>
+              {task.items.length === 0 && (
+                <div style={{ fontSize: 12.5, color: C.sub, padding: '10px 0 6px' }}>暂无子项</div>
+              )}
+              {task.items.map((it, idx) => (
+                <div
+                  key={it.t}
+                  onClick={() => onToggleItem(idx)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', cursor: 'pointer', borderTop: idx ? '1px solid ' + C.hairline : 'none' }}
+                >
+                  <div style={{
+                    width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                    border: it.done ? '1.5px solid ' + C.green : '1.5px solid #C9C2B2',
+                    background: it.done ? C.green : C.card,
+                    color: '#FFFFFF', fontSize: 12, fontWeight: 900,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all .15s ease',
+                  }}>{it.done ? '✓' : ''}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: it.done ? C.mute : C.ink, textDecoration: it.done ? 'line-through' : 'none' }}>{it.t}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function TasksScreen({ tasks, expandedIds, onToggleExpand, onToggleItem }) {
+      const done = tasks.reduce((s, t) => s + t.items.filter((i) => i.done).length, 0);
+      const total = tasks.reduce((s, t) => s + t.items.length, 0);
+      return (
+        <div style={{ padding: '16px 16px 104px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 4px' }}>
+            <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 1 }}>任务</div>
+            <div style={{ fontSize: 12, color: C.sub, fontWeight: 600, ...paperStyles.num }}>{tasks.length} 个清单 · 已完成 {done}/{total}</div>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            {tasks.map((t) => (
+              <TaskCard
+                key={t.id}
+                task={t}
+                expanded={expandedIds.indexOf(t.id) !== -1}
+                onToggleExpand={() => onToggleExpand(t.id)}
+                onToggleItem={(idx) => onToggleItem(t.id, idx)}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       屏 4：胶片墙（拍立得叠放）
+       ========================================================== */
+    const filmBackBase = {
+      position: 'absolute', left: '50%', top: 26, width: 238, height: 330,
+      background: C.card, borderRadius: 10, padding: 10,
+      border: '1px solid ' + C.border, pointerEvents: 'none',
+    };
+
+    function FilmScreen({ index, onPrev, onNext, onDot, onGoSettings, autoRotate }) {
+      const p = PHOTOS[index];
+      return (
+        <div style={{ padding: '16px 18px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 2px' }}>
+            <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 1 }}>胶片</div>
+            <div style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>共 6 张 · 仅存本机</div>
+          </div>
+
+          {/* 叠放舞台：下层 2 张错位旋转 + 模糊，上层 1 张清晰拍立得 */}
+          <div style={{ position: 'relative', height: 396, marginTop: 4 }}>
+            <div style={{ ...filmBackBase, transform: 'translateX(-50%) rotate(-6deg) translate(-26px, 12px)', filter: 'blur(4px)', opacity: 0.6, zIndex: 1 }} />
+            <div style={{ ...filmBackBase, transform: 'translateX(-50%) rotate(5.5deg) translate(26px, 6px)', filter: 'blur(2.5px)', opacity: 0.8, zIndex: 2 }} />
+            <div style={{
+              position: 'absolute', left: '50%', top: 10, transform: 'translateX(-50%)',
+              width: 238, background: C.card, borderRadius: 10,
+              padding: '10px 10px 8px', border: '1px solid ' + C.border,
+              boxShadow: '0 14px 34px rgba(34,33,30,0.20)', zIndex: 3,
+            }}>
+              <img
+                src={p.token}
+                alt={p.name}
+                style={{ width: '100%', height: 296, objectFit: 'cover', display: 'block', background: '#E9E4D8', borderRadius: 4 }}
+              />
+              <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, paddingTop: 8, letterSpacing: 2, ...paperStyles.num }}>
+                {String(index + 1).padStart(2, '0')} · {p.name}
+              </div>
+            </div>
+          </div>
+
+          {/* 圆点 + 左右箭头 */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 14 }}>
+            <button onClick={onPrev} className="paperArrowBtn" style={{ width: 42, height: 42, borderRadius: '50%', background: C.card, border: '1px solid ' + C.border, fontSize: 20, color: C.ink, fontFamily: 'inherit', lineHeight: 1, transition: 'all .15s ease' }}>‹</button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {PHOTOS.map((ph, i) => (
+                <div
+                  key={ph.token}
+                  onClick={() => onDot(i)}
+                  style={{
+                    width: i === index ? 18 : 6, height: 6, borderRadius: 999,
+                    background: i === index ? C.green : '#D8D2C2',
+                    cursor: 'pointer', transition: 'all .2s ease',
+                  }}
+                />
+              ))}
+            </div>
+            <button onClick={onNext} className="paperArrowBtn" style={{ width: 42, height: 42, borderRadius: '50%', background: C.card, border: '1px solid ' + C.border, fontSize: 20, color: C.ink, fontFamily: 'inherit', lineHeight: 1, transition: 'all .15s ease' }}>›</button>
+          </div>
+          <div style={{ textAlign: 'center', fontSize: 11.5, color: C.sub, marginTop: 8, ...paperStyles.num }}>
+            第 {index + 1} 张 / 共 {PHOTOS.length} 张
+          </div>
+
+          {/* 30秒自动轮换 · 设置入口 */}
+          <div style={{ ...paperStyles.card, borderRadius: 14, marginTop: 14, padding: '13px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 700 }}>⏱ 30秒自动轮换</div>
+              <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>
+                {autoRotate ? '已开启 · 胶片墙每 30 秒翻到下一张' : '已关闭 · 可在设置中开启'}
+              </div>
+            </div>
+            <button onClick={onGoSettings} style={{ border: 'none', background: 'transparent', color: C.green, fontSize: 13, fontWeight: 800, fontFamily: 'inherit', flexShrink: 0 }}>设置 ›</button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       屏：设置
+       ========================================================== */
+    function SettingsScreen({ tasks, autoRotate, onToggleAutoRotate }) {
+      const done = tasks.reduce((s, t) => s + t.items.filter((i) => i.done).length, 0);
+      const total = tasks.reduce((s, t) => s + t.items.length, 0);
+      return (
+        <div style={{ padding: '16px 16px 40px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 4px' }}>
+            <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: 1 }}>设置</div>
+            <div style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>口袋管家 LifePocket</div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <SectionCard title="隐私与数据">
+              <SetRow label="纯本地记账" sub="记账、任务与胶片均只保存在这台设备，无需联网" value="已开启" />
+              <SetRow label="本月记录" sub="11月支出 ¥2,463.00 · 收入 ¥8,588.80" value="12 笔" />
+              <SetRow label="任务清单" sub={'已完成 ' + done + '/' + total + ' 项'} value={tasks.length + ' 个'} />
+              <SetRow label="胶片照片" sub="拍立得相册 · 仅本机可见" value="6 张" />
+            </SectionCard>
+
+            <SectionCard title="通用">
+              <SetRow
+                label="胶片自动轮换"
+                sub="胶片墙每 30 秒自动翻到下一张"
+                right={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.sub, ...paperStyles.num }}>30 秒</span>
+                    <button
+                      onClick={onToggleAutoRotate}
+                      style={{
+                        width: 46, height: 26, borderRadius: 999, border: 'none',
+                        background: autoRotate ? C.green : '#D8D2C2',
+                        position: 'relative', transition: 'background .2s ease', flexShrink: 0,
+                      }}
+                    >
+                      <div style={{
+                        position: 'absolute', top: 3, left: autoRotate ? 23 : 3,
+                        width: 20, height: 20, borderRadius: '50%', background: '#FFFFFF',
+                        transition: 'left .2s ease', boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                      }} />
+                    </button>
+                  </div>
+                }
+              />
+              <SetRow label="深色模式" value="跟随系统" />
+            </SectionCard>
+
+            <SectionCard title="关于">
+              <SetRow label="口袋管家 LifePocket" sub="一本清爽的口袋账本 · 方向 B「晨光账本」" value="本地离线运行" />
+            </SectionCard>
+          </div>
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       记一笔弹层
+       ========================================================== */
+    function RecordOverlay({ seg, setSeg, bigCat, setBigCat, subCat, setSubCat, onClose, onSave }) {
+      return (
+        <div style={paperStyles.backdrop} onClick={onClose}>
+          <div style={paperStyles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 18, fontWeight: 900 }}>记一笔</div>
+              <button onClick={onClose} className="paperIconBtn" style={{ width: 30, height: 30, borderRadius: '50%', background: C.field, border: '1px solid ' + C.border, color: C.sub, fontSize: 13, fontFamily: 'inherit', lineHeight: 1 }}>✕</button>
+            </div>
+
+            {/* 支出 / 收入 分段 */}
+            <div style={{ display: 'flex', background: '#EFEAE0', borderRadius: 12, padding: 4, marginTop: 14 }}>
+              {['支出', '收入'].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSeg(s)}
+                  style={{
+                    flex: 1, height: 36, borderRadius: 9, border: 'none',
+                    fontFamily: 'inherit', fontSize: 14,
+                    fontWeight: s === seg ? 800 : 600,
+                    background: s === seg ? C.green : 'transparent',
+                    color: s === seg ? '#FFFFFF' : C.sub,
+                    transition: 'all .15s ease',
+                  }}
+                >{s}</button>
+              ))}
+            </div>
+
+            {/* 金额 */}
+            <div style={{ background: C.field, border: '1px solid ' + C.border, borderRadius: 14, padding: '14px 0 12px', marginTop: 14, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.sub, letterSpacing: 3 }}>金额</div>
+              <div style={{ fontSize: 42, fontWeight: 900, marginTop: 2, color: seg === '收入' ? C.green : C.ink, ...paperStyles.num }}>
+                {seg === '收入' ? '+¥88.8' : '¥28.5'}
+              </div>
+            </div>
+
+            {/* 大类 chips */}
+            <div style={paperStyles.sectionLabel}>大类</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {CATS.map((c) => (
+                <button key={c} onClick={() => setBigCat(c)} className="paperChip" style={{ ...paperStyles.chip, ...(bigCat === c ? paperStyles.chipActive : null) }}>{c}</button>
+              ))}
+            </div>
+
+            {/* 小类 chips */}
+            <div style={paperStyles.sectionLabel}>小类</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {SUBS.map((s) => (
+                <button key={s} onClick={() => setSubCat(s)} className="paperChip" style={{ ...paperStyles.chip, ...(subCat === s ? paperStyles.chipActive : null) }}>{s}</button>
+              ))}
+              <button className="paperChip" style={{ ...paperStyles.chip, ...paperStyles.chipDashed }}>+ 自定义</button>
+            </div>
+
+            {/* 备注 / 日期 */}
+            <div style={paperStyles.fieldBox}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: C.sub, flexShrink: 0 }}>备注</span>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>加了个蛋</span>
+            </div>
+            <div style={paperStyles.fieldBox}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: C.sub, flexShrink: 0 }}>日期</span>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>11月19日 · 今天</span>
+            </div>
+
+            <button onClick={onSave} style={paperStyles.primaryBtn}>保存</button>
+            <div style={{ textAlign: 'center', fontSize: 11, color: C.sub, marginTop: 8 }}>保存后回到明细 · 数据仅存本机</div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       新建任务弹层
+       ========================================================== */
+    function NewTaskSheet({ name, setName, onClose, onSave }) {
+      return (
+        <div style={paperStyles.backdrop} onClick={onClose}>
+          <div style={paperStyles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 18, fontWeight: 900 }}>新建任务</div>
+              <button onClick={onClose} className="paperIconBtn" style={{ width: 30, height: 30, borderRadius: '50%', background: C.field, border: '1px solid ' + C.border, color: C.sub, fontSize: 13, fontFamily: 'inherit', lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={paperStyles.sectionLabel}>任务名称</div>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="输入任务名称"
+              style={{
+                width: '100%', height: 44, borderRadius: 12,
+                border: '1px solid ' + C.border, background: C.field,
+                padding: '0 14px', fontSize: 14, fontFamily: 'inherit', color: C.ink,
+              }}
+            />
+            <div style={{ fontSize: 11.5, color: C.sub, marginTop: 8 }}>保存在本机 · 创建后可继续添加子项并勾选进度</div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button
+                onClick={onClose}
+                style={{
+                  flex: 1, height: 46, borderRadius: 13, background: C.card,
+                  border: '1px solid ' + C.border, color: C.sub, fontSize: 15,
+                  fontWeight: 700, fontFamily: 'inherit',
+                }}
+              >取消</button>
+              <button
+                onClick={onSave}
+                style={{
+                  flex: 1, height: 46, borderRadius: 13, background: C.green,
+                  border: 'none', color: '#FFFFFF', fontSize: 15,
+                  fontWeight: 800, fontFamily: 'inherit', letterSpacing: 4,
+                }}
+              >保存</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       App 状态机（每台手机独立一份）
+       ========================================================== */
+    function PocketApp({ initialTab = 'ledger', initialOverlay = false, initialLedgerView = 'list' }) {
+      const [tab, setTab] = useState(initialTab);
+      const [ledgerView, setLedgerView] = useState(initialLedgerView);
+      const [overlayOpen, setOverlayOpen] = useState(initialOverlay);
+      const [seg, setSeg] = useState('支出');
+      const [bigCat, setBigCat] = useState('吃🍗');
+      const [subCat, setSubCat] = useState('午饭');
+      const [tasks, setTasks] = useState(TASKS_INIT);
+      const [expandedIds, setExpandedIds] = useState(TASKS_INIT.map((t) => t.id));
+      const [newTaskOpen, setNewTaskOpen] = useState(false);
+      const [newTaskName, setNewTaskName] = useState('');
+      const [filmIndex, setFilmIndex] = useState(1); // 默认第 2 张
+      const [autoRotate, setAutoRotate] = useState(true);
+      const [toast, setToast] = useState('');
+
+      useEffect(() => {
+        if (!toast) return;
+        const t = setTimeout(() => setToast(''), 1900);
+        return () => clearTimeout(t);
+      }, [toast]);
+
+      // 胶片墙 30 秒自动轮换
+      useEffect(() => {
+        if (tab !== 'film' || !autoRotate) return;
+        const timer = setInterval(() => setFilmIndex((i) => (i + 1) % PHOTOS.length), 30000);
+        return () => clearInterval(timer);
+      }, [tab, autoRotate]);
+
+      const toggleTaskExpand = (id) => {
+        setExpandedIds((ids) => (ids.indexOf(id) !== -1 ? ids.filter((x) => x !== id) : ids.concat(id)));
+      };
+
+      const toggleTaskItem = (taskId, idx) => {
+        setTasks((ts) => ts.map((t) => {
+          if (t.id !== taskId) return t;
+          const items = t.items.map((it, i) => (i === idx ? { ...it, done: !it.done } : it));
+          return { ...t, items };
+        }));
+      };
+
+      const saveNewTask = () => {
+        const name = newTaskName.trim();
+        if (!name) { setToast('先给任务起个名字吧'); return; }
+        setTasks((ts) => ts.concat({ id: 't' + Date.now(), title: name, items: [] }));
+        setNewTaskName('');
+        setNewTaskOpen(false);
+        setToast('已创建任务 · ' + name);
+      };
+
+      const saveRecord = () => {
+        setOverlayOpen(false);
+        setToast(seg === '收入' ? '已记入 11月19日 · 收入 +¥88.80' : '已记入 11月19日 · ' + bigCat + ' ' + subCat + ' ¥28.50');
+      };
+
+      const isLedgerList = tab === 'ledger' && ledgerView === 'list';
+
+      return (
+        <div style={paperStyles.appRoot}>
+          {/* 屏幕主体（记账明细带账本格线） */}
+          <div
+            className={isLedgerList ? 'paperScroll paperLedgerGrid' : 'paperScroll'}
+            style={paperStyles.screenBody}
+          >
+            {isLedgerList && <LedgerList onOpenStats={() => setLedgerView('stats')} />}
+            {tab === 'ledger' && ledgerView === 'stats' && <StatsScreen onBack={() => setLedgerView('list')} />}
+            {tab === 'tasks' && (
+              <TasksScreen
+                tasks={tasks}
+                expandedIds={expandedIds}
+                onToggleExpand={toggleTaskExpand}
+                onToggleItem={toggleTaskItem}
+              />
+            )}
+            {tab === 'film' && (
+              <FilmScreen
+                index={filmIndex}
+                onPrev={() => setFilmIndex((i) => (i + PHOTOS.length - 1) % PHOTOS.length)}
+                onNext={() => setFilmIndex((i) => (i + 1) % PHOTOS.length)}
+                onDot={(i) => setFilmIndex(i)}
+                onGoSettings={() => setTab('settings')}
+                autoRotate={autoRotate}
+              />
+            )}
+            {tab === 'settings' && (
+              <SettingsScreen
+                tasks={tasks}
+                autoRotate={autoRotate}
+                onToggleAutoRotate={() => setAutoRotate((v) => !v)}
+              />
+            )}
+          </div>
+
+          {/* FAB：记账屏记一笔 / 任务屏新建任务 */}
+          {isLedgerList && <Fab title="记一笔" onClick={() => setOverlayOpen(true)} />}
+          {tab === 'tasks' && <Fab title="新建任务" onClick={() => setNewTaskOpen(true)} />}
+
+          {/* 底部 Tab 栏：记账 / 任务 / 胶片 / 设置 */}
+          <TabBar tab={tab} onChange={(id) => { setTab(id); if (id === 'ledger') setLedgerView('list'); }} />
+
+          {/* 弹层 */}
+          {overlayOpen && (
+            <RecordOverlay
+              seg={seg}
+              setSeg={setSeg}
+              bigCat={bigCat}
+              setBigCat={setBigCat}
+              subCat={subCat}
+              setSubCat={setSubCat}
+              onClose={() => setOverlayOpen(false)}
+              onSave={saveRecord}
+            />
+          )}
+          {newTaskOpen && (
+            <NewTaskSheet
+              name={newTaskName}
+              setName={setNewTaskName}
+              onClose={() => setNewTaskOpen(false)}
+              onSave={saveNewTask}
+            />
+          )}
+
+          {toast && <Toast msg={toast} />}
+        </div>
+      );
+    }
+
+    /* ==========================================================
+       展示板：流程串联板（方向 B 专属构图）
+       ========================================================== */
+    const BOARD_W = 2732;
+    const BOARD_H = 2200;
+
+    function FlowArrows() {
+      return (
+        <svg width={BOARD_W} height={BOARD_H} style={{ position: 'absolute', left: 0, top: 0, zIndex: 1, pointerEvents: 'none' }}>
+          <defs>
+            <marker id="pbArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#22211E" opacity="0.7" />
+            </marker>
+          </defs>
+          {/* 记账明细 → 记一笔弹层 */}
+          <line x1="1586" y1="540" x2="1710" y2="540" stroke="#22211E" strokeWidth="1.6" opacity="0.55" markerEnd="url(#pbArrow)" />
+          {/* 记一笔弹层 → 保存后回到明细 */}
+          <line x1="1712" y1="1140" x2="1588" y2="1140" stroke="#22211E" strokeWidth="1.6" opacity="0.55" markerEnd="url(#pbArrow)" />
+        </svg>
+      );
+    }
+
+    function FlowLabel({ x, y, text }) {
+      return (
+        <div style={{
+          position: 'absolute', left: x, top: y, transform: 'translateX(-50%)',
+          fontSize: 12.5, fontWeight: 700, color: 'rgba(34,33,30,0.78)',
+          background: 'rgba(247,244,236,0.92)', padding: '4px 12px',
+          borderRadius: 999, border: '1px solid rgba(34,33,30,0.14)',
+          zIndex: 2, whiteSpace: 'nowrap',
+        }}>{text}</div>
+      );
+    }
+
+    function PhoneLabel({ x, y, w, num, title, sub }) {
+      return (
+        <div style={{ position: 'absolute', left: x, top: y, width: w, textAlign: 'center', zIndex: 2 }}>
+          <div style={{ fontSize: 15, fontWeight: 900, color: C.ink, letterSpacing: 1 }}>{num} {title}</div>
+          <div style={{ fontSize: 12, color: 'rgba(34,33,30,0.6)', marginTop: 4 }}>{sub}</div>
+        </div>
+      );
+    }
+
+    function Phone({ x, y, scale = 1, time, battery, zIndex = 2, children }) {
+      const w = 432 * scale;
+      const h = 912 * scale;
+      return (
+        <div style={{ position: 'absolute', left: x, top: y, width: w, height: h, zIndex }}>
+          <div style={{ transform: 'scale(' + scale + ')', transformOrigin: 'top left' }}>
+            <AndroidFrame time={time} battery={battery} darkMode={false}>
+              {children}
+            </AndroidFrame>
+          </div>
+        </div>
+      );
+    }
+
+    function Board() {
+      return (
+        <div className="boardGrid" style={{ position: 'relative', width: BOARD_W, height: BOARD_H, background: C.board, overflow: 'hidden' }}>
+          <FlowArrows />
+
+          {/* 顶部左侧标题区 */}
+          <div style={{ position: 'absolute', left: 84, top: 84, width: 740, zIndex: 2 }}>
+            <div style={{ display: 'inline-block', background: C.greenSoft, color: C.green, border: '1px solid rgba(46,110,78,0.25)', padding: '6px 16px', borderRadius: 999, fontSize: 13, fontWeight: 800, letterSpacing: 2 }}>方向 B · 晨光账本</div>
+            <h1 style={{ fontSize: 62, fontWeight: 900, letterSpacing: 3, marginTop: 20, color: C.ink }}>口袋管家</h1>
+            <div style={{ fontSize: 19, fontWeight: 800, color: C.green, letterSpacing: 7, marginTop: 6 }}>LifePocket</div>
+            <div style={{ fontSize: 17, color: C.sub, marginTop: 14, fontWeight: 500 }}>一本清爽的口袋账本</div>
+            <div style={{ marginTop: 26, fontSize: 13, color: 'rgba(34,33,30,0.75)', lineHeight: 2.1 }}>
+              <div>
+                <span style={{ fontWeight: 900 }}>主流程</span>　① 记账明细 <span style={{ color: C.green, fontWeight: 900 }}>→</span> 点 + 记一笔 <span style={{ color: C.green, fontWeight: 900 }}>→</span> ② 记一笔弹层 <span style={{ color: C.green, fontWeight: 900 }}>→</span> 保存后回到明细
+              </div>
+              <div>
+                <span style={{ fontWeight: 900 }}>辅助屏</span>　③ 任务 · ④ 胶片墙 · ⑤ 统计（封面卡「查看统计」进入）
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(34,33,30,0.55)', marginTop: 6 }}>
+                五台手机均为独立状态机：Tab 切换、弹层开合、任务勾选、胶片翻页、统计条 hover 皆可操作
+              </div>
+            </div>
+          </div>
+
+          {/* ① 记账明细（主手机，放大 1.2 倍，居中） */}
+          <Phone x={1060} y={236} scale={1.2} time="9:41" battery={85} zIndex={3}>
+            <PocketApp initialTab="ledger" />
+          </Phone>
+          <PhoneLabel x={1060} y={1348} w={519} num="①" title="记账明细" sub="默认屏 · 月汇总封面卡 + 账本格线" />
+
+          {/* ② 记一笔弹层（记账屏点 FAB 后的打开态） */}
+          <Phone x={1720} y={330} time="9:41" battery={85}>
+            <PocketApp initialTab="ledger" initialOverlay={true} />
+          </Phone>
+          <PhoneLabel x={1720} y={1258} w={432} num="②" title="记一笔弹层" sub="记账屏点 FAB 打开 · 保存后回到明细" />
+
+          {/* ③ 任务（右上） */}
+          <Phone x={2252} y={140} time="10:12" battery={72}>
+            <PocketApp initialTab="tasks" />
+          </Phone>
+          <PhoneLabel x={2252} y={1068} w={432} num="③" title="任务" sub="清单可展开勾选 · FAB 新建任务" />
+
+          {/* ④ 胶片墙（右下，错落） */}
+          <Phone x={2172} y={1180} time="20:15" battery={58}>
+            <PocketApp initialTab="film" />
+          </Phone>
+          <PhoneLabel x={2172} y={2108} w={432} num="④" title="胶片墙" sub="拍立得叠放 · 默认第 2 张 · 左右切换" />
+
+          {/* ⑤ 统计（左下） */}
+          <Phone x={90} y={810} time="9:41" battery={85}>
+            <PocketApp initialTab="ledger" initialLedgerView="stats" />
+          </Phone>
+          <PhoneLabel x={90} y={1738} w={432} num="⑤" title="统计" sub="大类占比横条 · 从封面卡「查看统计」进入" />
+
+          {/* 流程箭头标注 */}
+          <FlowLabel x={1649} y={506} text="点 + 记一笔" />
+          <FlowLabel x={1649} y={1154} text="保存后回到明细" />
+
+          {/* 底部落款 */}
+          <div style={{ position: 'absolute', left: 84, top: 2150, zIndex: 2, fontSize: 12, color: 'rgba(34,33,30,0.55)' }}>
+            花叔Design · 口袋管家 LifePocket · 方向 B「晨光账本」高保真交互原型　—　暖纸白 #F7F4EC · 墨黑 #22211E · 账本绿 #2E6E4E · 卡片描边 #E5E0D3
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      return <Board />;
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# IDE
+.idea/
+*.iml
+local.properties
+
+# 系统
+.DS_Store
+
+# 设计稿截图生成产物（保留 png 截图与 html）
+*.log

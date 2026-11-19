@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>口袋管家 · 六候选缩略图</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@600;900&family=Figtree:wght@700;800&family=JetBrains+Mono:wght@500;700&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #2B2B28; font-family: 'Noto Sans SC', sans-serif; padding: 40px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; max-width: 1300px; margin: 0 auto; }
+  .cellLabel { color: #D8D4C8; font-size: 13px; margin: 0 0 10px 4px; line-height: 1.5; }
+  .cellLabel b { color: #fff; font-size: 14px; }
+  .phone { width: 312px; height: 600px; border-radius: 26px; padding: 8px; background: #111; box-shadow: 0 14px 40px rgba(0,0,0,.5); margin: 0 auto; }
+  .screen { width: 100%; height: 100%; border-radius: 19px; overflow: hidden; position: relative; }
+  .foot { color: #8A867A; font-size: 11.5px; margin-top: 10px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+/* ---- 共用数据 ---- */
+const today = [
+  { cat: '吃', sub: '午饭 · 食堂套餐', amt: '-18.00', ic: '🍗', pc: '#FFD66B' },
+  { cat: '吃', sub: '奶茶 · 珍珠奶绿', amt: '-14.50', ic: '🧋', pc: '#F9B9E8' },
+  { cat: '行', sub: '地铁 · 4号线', amt: '-4.00', ic: '🚇', pc: '#9AD8FF' },
+];
+const yest = [
+  { cat: '学习', sub: '网课 · 英语冲刺班', amt: '-199.00', ic: '📚', pc: '#D8CBFF' },
+  { cat: '住', sub: '水电 · 十月电费', amt: '-86.20', ic: '🏠', pc: '#C8F0CE' },
+  { cat: '穿', sub: '优衣库摇粒绒', amt: '-149.00', ic: '👕', pc: '#FFE1A8' },
+];
+
+/* ---- 1 原研哉 ---- */
+function Hara() {
+  return (
+    <div style={{ background: '#F7F4EE', height: '100%', color: '#26221C', padding: '30px 26px', fontFamily: "'Noto Serif SC', serif" }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontSize: 13, letterSpacing: 6, color: '#8A8272' }}>十一月 · 冬</div>
+          <div style={{ fontSize: 44, fontWeight: 900, lineHeight: 1.25, marginTop: 6 }}>¥3,284<span style={{ fontSize: 20 }}>元</span></div>
+          <div style={{ fontSize: 12, color: '#8A8272', marginTop: 4, fontFamily: "'Noto Sans SC'" }}>本月支出 · 收入 ¥8,600</div>
+        </div>
+        <div style={{ width: 34, height: 34, background: '#B5532A', color: '#F7F4EE', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, marginTop: 4 }}>账</div>
+      </div>
+      <div style={{ marginTop: 34, fontSize: 12, letterSpacing: 4, color: '#8A8272', fontFamily: "'Noto Sans SC'" }}>十九日 · 星期三</div>
+      {today.map((t, i) => (
+        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid #E8E2D4' }}>
+          <div><div style={{ fontSize: 15 }}>{t.sub}</div><div style={{ fontSize: 11, color: '#A39B87', marginTop: 3, fontFamily: "'Noto Sans SC'" }}>{t.cat}</div></div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{t.amt}</div>
+        </div>
+      ))}
+      <div style={{ marginTop: 26, fontSize: 12, letterSpacing: 4, color: '#8A8272', fontFamily: "'Noto Sans SC'" }}>十八日</div>
+      {yest.slice(0, 2).map((t, i) => (
+        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid #E8E2D4' }}>
+          <div style={{ fontSize: 15 }}>{t.sub}</div><div style={{ fontSize: 16, fontWeight: 600 }}>{t.amt}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---- 2 Rams ---- */
+function Rams() {
+  return (
+    <div style={{ background: '#E4E6E8', height: '100%', color: '#161616', fontFamily: "'Noto Sans SC'" }}>
+      <div style={{ background: '#F7F7F5', margin: 10, padding: '18px 18px 14px', border: '1px solid #C6C8CB' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, letterSpacing: 3, color: '#6E7176' }}>
+          <span>MONTHLY · 月度读数</span><span style={{ color: '#D98200' }}>● REC</span>
+        </div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 36, fontWeight: 700, marginTop: 8 }}>-3,284.60</div>
+        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#6E7176', marginTop: 2 }}>IN +8,600.00 · 十一月</div>
+      </div>
+      <div style={{ margin: '0 10px', background: '#F7F7F5', border: '1px solid #C6C8CB' }}>
+        <div style={{ padding: '9px 14px', fontSize: 11, letterSpacing: 3, color: '#6E7176', borderBottom: '1px solid #C6C8CB' }}>DETAIL · 明细</div>
+        {[...today, ...yest.slice(0, 2)].map((t, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid #DDDFE2' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <span style={{ width: 22, height: 22, background: '#EDEDEA', border: '1px solid #C6C8CB', fontSize: 11, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{t.ic}</span>
+              <span style={{ fontSize: 13.5 }}>{t.sub}</span>
+            </div>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 700 }}>{t.amt}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ position: 'absolute', bottom: 14, left: 10, right: 10, background: '#161616', color: '#F7F7F5', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', fontSize: 12, letterSpacing: 2 }}>
+        <span>明细</span><span style={{ color: '#D98200' }}>统计</span><span>任务</span><span>胶片</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---- 3 Monzo ---- */
+function Monzo() {
+  const jar = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 12, fontSize: 15 };
+  return (
+    <div style={{ background: '#F4F5F7', height: '100%', fontFamily: "'Figtree','Noto Sans SC',sans-serif", color: '#14233C' }}>
+      <div style={{ background: '#FF4F40', padding: '26px 22px 40px', color: '#fff' }}>
+        <div style={{ fontSize: 13, opacity: 0.9 }}>十一月支出</div>
+        <div style={{ fontSize: 46, fontWeight: 800, marginTop: 4 }}>¥3,284.60</div>
+        <div style={{ fontSize: 12.5, opacity: 0.92, marginTop: 2 }}>收入 ¥8,600 · 还剩 11 天</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          {['记一笔', '预算', '统计'].map((x, i) => (
+            <span key={i} style={{ background: i === 0 ? '#fff' : 'rgba(255,255,255,.28)', color: i === 0 ? '#FF4F40' : '#fff', padding: '7px 16px', borderRadius: 999, fontSize: 13, fontWeight: 700 }}>{x}</span>
+          ))}
+        </div>
+      </div>
+      <div style={{ background: '#fff', margin: '-22px 10px 10px', borderRadius: '30px 30px 24px 24px', padding: '18px 18px 8px' }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#5A6B85' }}>今天 · 钱去了哪里</div>
+        {today.map((t, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid #F1F3F6' }}>
+            <span style={{ ...jar, background: t.pc }}>{t.cat[0]}</span>
+            <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700 }}>{t.sub.split(' · ')[0]}</div><div style={{ fontSize: 11.5, color: '#8A97AB' }}>{t.sub.split(' · ')[1]}</div></div>
+            <span style={{ fontWeight: 800, fontSize: 15 }}>{t.amt}</span>
+          </div>
+        ))}
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#5A6B85', marginTop: 8 }}>昨天</div>
+        {yest.slice(0, 2).map((t, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0' }}>
+            <span style={{ ...jar, background: t.pc }}>{t.cat[0]}</span>
+            <div style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{t.sub}</div>
+            <span style={{ fontWeight: 800, fontSize: 15 }}>{t.amt}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---- 4 Superlist（未亲见，公开资料归纳）---- */
+function Superlist() {
+  const bar = { width: 4, borderRadius: 2, alignSelf: 'stretch' };
+  return (
+    <div style={{ background: '#FAFAFB', height: '100%', color: '#1C1C22', padding: '24px 18px', fontFamily: "'Noto Sans SC'" }}>
+      <div style={{ fontSize: 26, fontWeight: 900 }}>十一月</div>
+      <div style={{ width: 64, height: 6, borderRadius: 3, marginTop: 8, background: 'linear-gradient(90deg,#F5484D,#8E44EC)' }} />
+      <div style={{ marginTop: 18, background: '#fff', borderRadius: 18, boxShadow: '0 4px 18px rgba(20,20,30,.08)', padding: '14px 14px 14px 18px', borderLeft: '4px solid #F5484D' }}>
+        <div style={{ fontSize: 12, color: '#9AA0AB' }}>今天支出合计</div>
+        <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>-¥36.50</div>
+      </div>
+      {today.map((t, i) => (
+        <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10, background: '#fff', borderRadius: 16, boxShadow: '0 2px 10px rgba(20,20,30,.06)', padding: '12px 14px' }}>
+          <span style={{ ...bar, background: t.pc }} />
+          <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 700 }}>{t.sub}</div><div style={{ fontSize: 11.5, color: '#9AA0AB' }}>{t.cat}</div></div>
+          <span style={{ fontWeight: 800 }}>{t.amt}</span>
+        </div>
+      ))}
+      <div style={{ position: 'absolute', right: 18, bottom: 20, width: 56, height: 56, borderRadius: 18, background: 'linear-gradient(135deg,#F5484D,#8E44EC)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, boxShadow: '0 8px 20px rgba(142,68,236,.4)' }}>＋</div>
+    </div>
+  );
+}
+
+/* ---- 5 Native Polish（Things 3 式）---- */
+function Things() {
+  return (
+    <div style={{ background: '#fff', height: '100%', color: '#1D1D1F', padding: '26px 20px', fontFamily: "'Noto Sans SC'" }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 30, fontWeight: 900, letterSpacing: 1 }}>口袋管家</span>
+        <span style={{ color: '#3478F6', fontSize: 14, fontWeight: 500 }}>‹ 11月 ›</span>
+      </div>
+      <div style={{ display: 'flex', gap: 14, marginTop: 14, fontSize: 13.5 }}>
+        <span style={{ color: '#8A8F9B' }}>支出 <b style={{ color: '#1D1D1F' }}>¥3,284</b></span>
+        <span style={{ color: '#8A8F9B' }}>收入 <b style={{ color: '#1D1D1F' }}>¥8,600</b></span>
+      </div>
+      <div style={{ marginTop: 22, fontSize: 13.5, fontWeight: 700, color: '#F6C21B' }}>★ 今天</div>
+      {today.map((t, i) => (
+        <div key={i}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0' }}>
+            <span style={{ fontSize: 16 }}>{t.ic}</span>
+            <div style={{ flex: 1 }}><div style={{ fontSize: 15 }}>{t.sub}</div><div style={{ fontSize: 12, color: '#8A8F9B', marginTop: 2 }}>{t.cat}</div></div>
+            <span style={{ fontSize: 15, fontWeight: 500 }}>{t.amt}</span>
+          </div>
+          <div style={{ height: 1, background: '#ECEEF1', marginLeft: 28 }} />
+        </div>
+      ))}
+      <div style={{ marginTop: 16, fontSize: 13.5, fontWeight: 700, color: '#8A8F9B' }}>昨天</div>
+      {yest.slice(0, 2).map((t, i) => (
+        <div key={i}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0' }}>
+            <span style={{ fontSize: 16 }}>{t.ic}</span>
+            <div style={{ flex: 1, fontSize: 15 }}>{t.sub}</div>
+            <span style={{ fontSize: 15 }}>{t.amt}</span>
+          </div>
+          <div style={{ height: 1, background: '#ECEEF1', marginLeft: 28 }} />
+        </div>
+      ))}
+      <div style={{ position: 'absolute', right: 20, bottom: 24, width: 56, height: 56, borderRadius: '50%', background: '#3478F6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, boxShadow: '0 10px 24px rgba(52,120,246,.4)' }}>＋</div>
+    </div>
+  );
+}
+
+/* ---- 6 Hattori 错位 ---- */
+function Hattori() {
+  const stripes = {
+    backgroundImage: 'repeating-linear-gradient(0deg, #E4572E 0 5px, transparent 5px 11px), repeating-linear-gradient(0deg, #2B6CB0 0 5px, transparent 5px 11px)',
+    backgroundPosition: '0 0, 4px 3px',
+    WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
+  };
+  return (
+    <div style={{ background: '#EFE9DC', height: '100%', color: '#191512', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', padding: '30px 22px 6px' }}>
+        <div style={{ ...stripes, fontFamily: "'Noto Sans SC'", fontWeight: 900, fontSize: 150, lineHeight: 0.9, width: 'fit-content' }}>账</div>
+        <div style={{ position: 'absolute', top: 40, right: 18, background: '#F7E017', padding: '10px 14px', transform: 'rotate(-3deg)', fontFamily: "'ZCOOL KuaiLe'", fontSize: 20 }}>十一月<br />花啦</div>
+        <div style={{ position: 'absolute', bottom: 6, right: 40, width: 46, height: 46, borderRadius: '50%', background: '#E4572E' }} />
+      </div>
+      <div style={{ padding: '14px 22px', fontFamily: "'Noto Sans SC'" }}>
+        {[...today, yest[0]].map((t, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 2px', borderBottom: '2px solid #191512' }}>
+            <span style={{ fontSize: 14.5, fontWeight: 700 }}>{t.cat}｜{t.sub}</span>
+            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14.5 }}>{t.amt}</span>
+          </div>
+        ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 2px' }}>
+          <span style={{ fontSize: 13 }}>本月合计</span>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15 }}>−3,284.60</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const cells = [
+  { label: '① 原研哉「白·手账」— 最佳设计师', foot: '暖纸·衬线·一处朱砂·无卡片', C: Hara },
+  { label: '② Dieter Rams 仪表 — 最佳设计师', foot: '冷灰面板·等宽读数·单一橙', C: Rams },
+  { label: '③ Monzo 式友好金融 — 现实参照（样张亲见）', foot: '珊瑚红顶区·粉彩罐·大圆角', C: Monzo },
+  { label: '④ Superlist 式 — 现实参照 ⚠️未亲见', foot: '卡片+渐变强调（公开资料归纳）', C: Superlist },
+  { label: '⑤ 原生精修 Native Polish — 秒数轮盘 #10（样张亲见）', foot: '纯白列表·发丝线·唯一蓝', C: Things },
+  { label: '⑥ 服部一成玩味错位 — 秒数轮盘 东亚#10（样张亲见）', foot: '条纹巨字·倾斜色块·老实信息栏', C: Hattori },
+];
+
+function App() {
+  return (
+    <div className="grid">
+      {cells.map((c, i) => (
+        <div key={i}>
+          <div className="cellLabel"><b>{c.label}</b></div>
+          <div className="phone"><div className="screen"><c.C /></div></div>
+          <div className="foot">{c.foot}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
