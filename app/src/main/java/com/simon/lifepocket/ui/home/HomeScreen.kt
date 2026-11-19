@@ -172,14 +172,16 @@ fun HomeScreen(photoVm: PhotoViewModel, taskVm: TaskViewModel) {
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        // 下层两张：偏移 + 旋转 + 虚化（API 31+ 真模糊，低版本降级为降不透明度）
+                        // 下层两张：露角更明显的那张（右下、探出更多）就是「下一张」，
+                        // 上滑后出现的正是它；另一张（左下小露边）是下下张。
+                        // API 31+ 真模糊，低版本降级为降不透明度。
                         PhotoCard(
                             photo = a,
                             width = 218.dp,
                             imageHeight = 186.dp,
                             modifier = Modifier
-                                .offset(x = (-10).dp, y = 16.dp)
-                                .graphicsLayer { rotationZ = -2.5f; alpha = 0.85f }
+                                .offset(x = 10.dp, y = 30.dp)
+                                .graphicsLayer { rotationZ = 2.5f; alpha = 0.85f }
                                 .then(if (Build.VERSION.SDK_INT >= 31) Modifier.blur(3.dp) else Modifier),
                         )
                         PhotoCard(
@@ -187,8 +189,8 @@ fun HomeScreen(photoVm: PhotoViewModel, taskVm: TaskViewModel) {
                             width = 218.dp,
                             imageHeight = 186.dp,
                             modifier = Modifier
-                                .offset(x = 10.dp, y = 30.dp)
-                                .graphicsLayer { rotationZ = 2.5f; alpha = 0.85f }
+                                .offset(x = (-10).dp, y = 16.dp)
+                                .graphicsLayer { rotationZ = -2.5f; alpha = 0.85f }
                                 .then(if (Build.VERSION.SDK_INT >= 31) Modifier.blur(3.dp) else Modifier),
                         )
                         // 上层一张：清晰，点按换下一张，长按移出
