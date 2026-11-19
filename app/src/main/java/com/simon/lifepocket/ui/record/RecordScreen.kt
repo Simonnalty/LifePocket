@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -29,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -134,20 +137,22 @@ fun RecordScreen(vm: RecordViewModel, onOpenSettings: () -> Unit) {
             }
         }
 
-        // 「记」按钮：墨色方块，全 App 唯一入口
+        // 记一笔入口：圆形加号按钮，全 App 唯一入口
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 24.dp, bottom = 26.dp)
-                .size(54.dp)
+                .size(56.dp)
+                .shadow(6.dp, CircleShape)
+                .clip(CircleShape)
                 .background(Ink)
                 .clickable { showSheet = true },
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                "记",
+                "+",
                 color = Paper,
-                fontSize = 23.sp,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = FontFamily.Serif,
             )
@@ -193,7 +198,7 @@ private fun DetailList(records: List<Record>, categories: List<Category>, onDele
             Spacer(Modifier.height(90.dp))
             Text("这个月还没有记录", fontSize = 15.sp, color = SubInk, fontFamily = FontFamily.Serif)
             Spacer(Modifier.height(8.dp))
-            Text("点右下角「记」，写下第一笔", fontSize = 13.sp, color = SubInk)
+            Text("点右下角「＋」，写下第一笔", fontSize = 13.sp, color = SubInk)
         }
         return
     }

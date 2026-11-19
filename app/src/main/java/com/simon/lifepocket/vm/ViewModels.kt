@@ -34,6 +34,13 @@ class RecordViewModel(app: Application) : ViewModel() {
     private val categoryDao = db.categoryDao()
     private val subDao = db.subCategoryDao()
     private val recordDao = db.recordDao()
+    private val prefs = app.getSharedPreferences("lifepocket", android.content.Context.MODE_PRIVATE)
+
+    /** 上次记账用的收/支类型（0 支出 / 1 收入），打开弹层时用作默认 */
+    fun lastType(): Int = prefs.getInt("last_type", 0)
+
+    /** 上次记账用的大类 id，-1 表示还没有记录过 */
+    fun lastCatId(): Long = prefs.getLong("last_cat_id", -1L)
 
     private val _month = MutableStateFlow(LpMonth.now())
     val month: StateFlow<LpMonth.YMonth> = _month
@@ -81,6 +88,7 @@ class RecordViewModel(app: Application) : ViewModel() {
     }
 
     fun addRecord(type: Int, amountCents: Long, categoryId: Long, subName: String, note: String) {
+        prefs.edit().putInt("last_type", type).putLong("last_cat_id", categoryId).apply()
         viewModelScope.launch(Dispatchers.IO) {
             recordDao.insert(
                 Record(

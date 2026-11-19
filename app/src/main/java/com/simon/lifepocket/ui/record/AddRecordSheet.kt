@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,12 +24,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -47,19 +52,27 @@ import com.simon.lifepocket.ui.theme.SubInk
 import com.simon.lifepocket.vm.RecordViewModel
 import kotlin.math.roundToLong
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddRecordSheet(vm: RecordViewModel, onDismiss: () -> Unit) {
-    var type by remember { mutableStateOf(0) } // 0 支出 / 1 收入
+    var type by remember { mutableStateOf(vm.lastType()) } // 0 支出 / 1 收入
     var amountText by remember { mutableStateOf("") }
     val categories by vm.categories.collectAsStateWithLifecycle(initialValue = emptyList())
-    var catId by remember(categories) { mutableStateOf(categories.firstOrNull()?.id ?: 0L) }
+    var catId by remember { mutableStateOf(-1L) } // -1 = 等待分类列表到位，再用上次用的大类
+    var catReady by remember { mutableStateOf(false) }
     var subSel by remember { mutableStateOf("") }
     var customMode by remember { mutableStateOf(false) }
     var customText by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
 
-    val subs = if (catId != 0L) vm.subsFor(catId).collectAsStateWithLifecycle(initialValue = emptyList()).value else emptyList()
+    LaunchedEffect(categories) {
+        if (!catReady && categories.isNotEmpty()) {
+            catId = categories.firstOrNull { it.id == vm.lastCatId() }?.id ?: categories.first().id
+            catReady = true
+        }
+    }
+
+    val subs = if (catReady && catId > 0) vm.subsFor(catId).collectAsStateWithLifecycle(initialValue = emptyList()).value else emptyList()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -121,29 +134,33 @@ fun AddRecordSheet(vm: RecordViewModel, onDismiss: () -> Unit) {
                 Text("今天", fontSize = 12.5.sp, color = SubInk, modifier = Modifier.padding(bottom = 10.dp))
             }
 
-            Text("大类", fontSize = 12.5.sp, letterSpacing = 5.sp, color = SubInk, modifier = Modifier.padding(top = 26.dp))
-            Row(
-                Modifier.padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
+            Text("大类 · 点按切换", fontSize = 12.5.sp, letterSpacing = 5.sp, color = SubInk, modifier = Modifier.padding(top = 26.dp))
+            FlowRow(
+                Modifier.padding(top = 12.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 categories.forEach { c ->
-                    Column(Modifier.clickable {
-                        catId = c.id
-                        subSel = ""
-                    }) {
+                    val active = catId == c.id
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .border(1.dp, if (active) Ink else Hairline, RoundedCornerShape(4.dp))
+                            .background(if (active) CardWhite else Color.Transparent)
+                            .clickable {
+                                catId = c.id
+                                subSel = ""
+                            }
+                            .padding(horizontal = 16.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${c.emoji} ", fontSize = 14.sp)
                         Text(
                             c.name,
-                            fontSize = 17.sp,
-                            fontWeight = if (catId == c.id) FontWeight.Black else FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            fontWeight = if (active) FontWeight.Black else FontWeight.SemiBold,
                             fontFamily = FontFamily.Serif,
-                            color = if (catId == c.id) Ink else SubInk,
-                        )
-                        Box(
-                            Modifier
-                                .padding(top = 4.dp)
-                                .fillMaxWidth()
-                                .height(2.dp)
-                                .background(if (catId == c.id) Seal else Color.Transparent)
+                            color = if (active) Ink else SubInk,
                         )
                     }
                 }
@@ -185,6 +202,14 @@ fun AddRecordSheet(vm: RecordViewModel, onDismiss: () -> Unit) {
                             .padding(vertical = 8.dp)
                     )
                 } else {
+                    if (subs.isEmpty()) {
+                        Text(
+                            "该大类还没有小类 · 可点「＋自定义」添加，或直接保存",
+                            fontSize = 12.5.sp,
+                            color = SubInk,
+                            modifier = Modifier.padding(vertical = 10.dp),
+                        )
+                    }
                     subs.forEach { s ->
                         Box(
                             Modifier
@@ -239,7 +264,7 @@ fun AddRecordSheet(vm: RecordViewModel, onDismiss: () -> Unit) {
             }
 
             val cents = (amountText.toDoubleOrNull()?.times(100))?.roundToLong() ?: 0L
-            val canSave = cents > 0 && catId != 0L
+            val canSave = cents > 0 && catId > 0
             Box(
                 Modifier
                     .fillMaxWidth()

@@ -1,5 +1,8 @@
 package com.simon.lifepocket.ui
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -27,10 +30,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.simon.lifepocket.LifePocketApp
-import com.simon.lifepocket.ui.film.FilmScreen
+import com.simon.lifepocket.ui.home.HomeScreen
 import com.simon.lifepocket.ui.record.RecordScreen
 import com.simon.lifepocket.ui.settings.SettingsScreen
-import com.simon.lifepocket.ui.task.TaskScreen
 import com.simon.lifepocket.ui.theme.Hairline
 import com.simon.lifepocket.ui.theme.Ink
 import com.simon.lifepocket.ui.theme.Paper
@@ -39,9 +41,8 @@ import com.simon.lifepocket.ui.theme.SubInk
 import com.simon.lifepocket.vm.AppVmFactory
 
 private val TABS = listOf(
-    "record" to "账目",
-    "tasks" to "事",
-    "film" to "影",
+    "home" to "家",
+    "record" to "账",
 )
 
 @Composable
@@ -50,8 +51,8 @@ fun Root() {
     val app = LocalContext.current.applicationContext as LifePocketApp
     val factory = remember { AppVmFactory(app) }
     val backStack by nav.currentBackStackEntryAsState()
-    val route = backStack?.destination?.route ?: "record"
-    val showBar = route == "record" || route == "tasks" || route == "film"
+    val route = backStack?.destination?.route ?: "home"
+    val showBar = route == "home" || route == "record"
 
     Scaffold(
         containerColor = Paper,
@@ -72,8 +73,7 @@ fun Root() {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         TABS.forEach { (r, label) ->
-                            val active = route == r ||
-                                (r == "record" && route == "record")
+                            val active = route == r
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -112,23 +112,28 @@ fun Root() {
     ) { padding ->
         NavHost(
             navController = nav,
-            startDestination = "record",
+            startDestination = "home",
+            // 快速转场：替代默认 700ms 淡入淡出，全局只留 120ms，操作更跟手
+            enterTransition = { fadeIn(tween(120)) },
+            exitTransition = { fadeOut(tween(120)) },
+            popEnterTransition = { fadeIn(tween(120)) },
+            popExitTransition = { fadeOut(tween(120)) },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .statusBarsPadding(),
         ) {
+            composable("home") {
+                HomeScreen(
+                    photoVm = viewModel(factory = factory),
+                    taskVm = viewModel(factory = factory),
+                )
+            }
             composable("record") {
                 RecordScreen(
                     vm = viewModel(factory = factory),
                     onOpenSettings = { nav.navigate("settings") },
                 )
-            }
-            composable("tasks") {
-                TaskScreen(vm = viewModel(factory = factory))
-            }
-            composable("film") {
-                FilmScreen(vm = viewModel(factory = factory))
             }
             composable("settings") {
                 SettingsScreen(
