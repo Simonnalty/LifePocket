@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 口袋管家 LifePocket
-     隐私声明：本应用【不申请任何网络权限】，所有数据仅保存在你的手机上。
-     这不是口号——打开本文件就能验证，manifest 里没有 INTERNET 权限。 -->
+     隐私声明：数据全部只保存在手机本地（Room）。应用默认不联网；
+     仅当用户在设置里主动开启「AI 助手」后，才会因调用所选模型服务（默认智谱 GLM-4-Flash，
+     可换豆包等）而发送【用户输入的那句话】与类目名列表——账目明细、照片、任务库永不通过网络传输。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 仅用于可选的 AI 功能（默认关闭）；普通记账/待办/相册完全离线可用 -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".LifePocketApp"

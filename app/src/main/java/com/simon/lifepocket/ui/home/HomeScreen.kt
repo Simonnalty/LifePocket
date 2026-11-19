@@ -1,6 +1,7 @@
 package com.simon.lifepocket.ui.home
 
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
@@ -19,13 +20,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -61,9 +67,16 @@ import com.simon.lifepocket.ui.theme.Ink
 import com.simon.lifepocket.ui.theme.Paper
 import com.simon.lifepocket.ui.theme.Seal
 import com.simon.lifepocket.ui.theme.SubInk
+import com.simon.lifepocket.util.AiSettings
+import com.simon.lifepocket.util.LlmClient
 import com.simon.lifepocket.vm.PhotoViewModel
 import com.simon.lifepocket.vm.TaskViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * 主界面：上面是胶片相册（轮换的精选照片），下面是待办事项；记账在「账」页。
@@ -78,6 +91,14 @@ fun HomeScreen(photoVm: PhotoViewModel, taskVm: TaskViewModel) {
     var pendingDeletePhoto by remember { mutableStateOf<Photo?>(null) }
     var showNewTask by remember { mutableStateOf(false) }
     var pendingGroup by remember { mutableStateOf<TaskGroupWithItems?>(null) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showAiTask by remember { mutableStateOf(false) }
+    var aiTaskText by remember { mutableStateOf("") }
+    var aiTaskBusy by remember { mutableStateOf(false) }
+    var aiTaskMsg by remember { mutableStateOf("") }
+    var aiTaskResult by remember { mutableStateOf<List<Pair<String, List<String>>>>(emptyList()) }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
@@ -293,17 +314,150 @@ fun HomeScreen(photoVm: PhotoViewModel, taskVm: TaskViewModel) {
             }
         }
 
-        Box(
+        Row(
             Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp)
-                .height(44.dp)
-                .border(1.dp, Hairline, RoundedCornerShape(3.dp))
-                .clickable { showNewTask = true },
-            contentAlignment = Alignment.Center,
+                .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("＋ 新建一个任务", fontSize = 14.sp, color = Ink, letterSpacing = 2.sp)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .border(1.dp, Hairline, RoundedCornerShape(3.dp))
+                    .clickable { showNewTask = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("＋ 新建一个任务", fontSize = 13.5.sp, color = Ink, letterSpacing = 1.sp)
+            }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .border(1.dp, if (AiSettings.ready(context)) Ink else Hairline, RoundedCornerShape(3.dp))
+                    .background(if (AiSettings.ready(context)) CardWhite else Color.Transparent)
+                    .clickable { showAiTask = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "AI 拆任务",
+                    fontSize = 13.5.sp,
+                    color = if (AiSettings.ready(context)) Ink else SubInk,
+                    letterSpacing = 1.sp,
+                )
+            }
         }
+    }
+
+    if (showAiTask) {
+        AlertDialog(
+            onDismissRequest = { if (!aiTaskBusy) showAiTask = false },
+            title = { Text("AI 拆任务", fontSize = 17.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    if (aiTaskResult.isEmpty()) {
+                        TextField(
+                            value = aiTaskText,
+                            onValueChange = { aiTaskText = it.take(600) },
+                            placeholder = {
+                                Text(
+                                    "把整段计划粘贴进来，自动拆成任务和小事\n例如：下个月装修新家，要量房、找装修公司、定预算；12月英语考试，要背单词、刷真题",
+                                    fontSize = 12.5.sp,
+                                    color = SubInk,
+                                )
+                            },
+                            minLines = 4,
+                            maxLines = 8,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Ink,
+                                unfocusedIndicatorColor = Hairline,
+                                cursorColor = Seal,
+                            ),
+                        )
+                        if (aiTaskMsg.isNotEmpty()) {
+                            Text(aiTaskMsg, fontSize = 12.sp, color = SubInk, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    } else {
+                        // 预览：确认后才真正创建
+                        Column(
+                            Modifier
+                                .heightIn(max = 400.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            aiTaskResult.forEach { (g, items) ->
+                                Text("▪ $g", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Ink)
+                                items.forEach { Text("　· $it", fontSize = 13.sp, color = SubInk) }
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = if (aiTaskResult.isEmpty()) {
+                        aiTaskText.isNotBlank() && !aiTaskBusy && AiSettings.ready(context)
+                    } else !aiTaskBusy,
+                    onClick = {
+                        if (aiTaskResult.isEmpty()) {
+                            aiTaskBusy = true
+                            aiTaskMsg = ""
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val sys = "你是待办清单规划师。把用户的一大段计划拆分成若干个大任务，每个大任务下面列出要做的具体小事。\n" +
+                                        "只输出一个 JSON 数组，不要解释：" +
+                                        "[{\"group\":\"任务名(不超过12字)\",\"items\":[\"小事1\",\"小事2\"]}]\n" +
+                                        "要求：最多 8 个任务组，每组最多 15 条小事；小事是可执行的短句（不超过15字）；全部用中文；按常识合理拆分。"
+                                    val raw = LlmClient.chat(context, sys, aiTaskText)
+                                    val arr = JSONArray(LlmClient.stripFence(raw))
+                                    val parsed = mutableListOf<Pair<String, List<String>>>()
+                                    for (k in 0 until arr.length()) {
+                                        val o = arr.getJSONObject(k)
+                                        val g = o.optString("group", "").trim()
+                                        val items = mutableListOf<String>()
+                                        val ia = o.optJSONArray("items")
+                                        if (ia != null) for (m in 0 until ia.length()) items.add(ia.optString(m, "").trim())
+                                        if (g.isNotEmpty() && items.isNotEmpty()) parsed.add(g to items)
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        if (parsed.isEmpty()) aiTaskMsg = "没解析出任务，换个说法再试一次"
+                                        else aiTaskResult = parsed
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) { aiTaskMsg = "解析失败：${e.message?.take(60)}" }
+                                } finally {
+                                    withContext(Dispatchers.Main) { aiTaskBusy = false }
+                                }
+                            }
+                        } else {
+                            val snapshot = aiTaskResult
+                            aiTaskBusy = true
+                            taskVm.addGroupsFromAi(snapshot) { g, i ->
+                                Toast.makeText(context, "已创建 $g 个任务、$i 条小事 ✓", Toast.LENGTH_SHORT).show()
+                                showAiTask = false
+                                aiTaskBusy = false
+                                aiTaskText = ""
+                                aiTaskResult = emptyList()
+                                aiTaskMsg = ""
+                            }
+                        }
+                    },
+                ) {
+                    Text(
+                        if (aiTaskResult.isEmpty()) (if (aiTaskBusy) "解析中…" else "AI 拆解") else "确认创建",
+                        color = Seal,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !aiTaskBusy,
+                    onClick = { showAiTask = false; aiTaskResult = emptyList(); aiTaskMsg = "" },
+                ) { Text(if (aiTaskResult.isEmpty()) "取消" else "返回修改", color = SubInk) }
+            },
+        )
     }
 
     pendingDeletePhoto?.let { p ->

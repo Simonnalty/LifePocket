@@ -15,6 +15,8 @@ import com.simon.lifepocket.data.SubCategory
 import com.simon.lifepocket.data.TaskGroup
 import com.simon.lifepocket.data.TaskGroupWithItems
 import com.simon.lifepocket.data.TaskItem
+import com.simon.lifepocket.util.AiSettings
+import com.simon.lifepocket.util.LlmClient
 import com.simon.lifepocket.util.LpMonth
 import com.simon.lifepocket.util.Money
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -149,11 +152,56 @@ class TaskViewModel(app: Application) : ViewModel() {
     private val groupDao = db.taskGroupDao()
     private val itemDao = db.taskItemDao()
 
+    /** 最新分组快照（供 AI 拆任务时做同名去重） */
+    private var cachedGroups: List<TaskGroup> = emptyList()
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            groupDao.observeAll().collect { cachedGroups = it }
+        }
+    }
+
     val taskCards: Flow<List<TaskGroupWithItems>> = combine(
         groupDao.observeAll(),
         itemDao.observeAll(),
     ) { groups, items ->
         groups.map { g -> TaskGroupWithItems(g, items.filter { it.groupId == g.id }) }
+    }
+
+    /**
+     * AI 拆任务：批量创建任务组+小任务；同名组合并（小任务追加到现有组末尾）。
+     * 上限 10 组 × 20 条。返回 (实际新建组数, 实际新增条目数)。
+     */
+    fun addGroupsFromAi(groups: List<Pair<String, List<String>>>, onDone: (Int, Int) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            var newGroups = 0
+            var newItems = 0
+            val existing = cachedGroups.associateBy { it.name }
+            val created = mutableMapOf<String, Long>()
+            for ((name, items) in groups.take(10)) {
+                val cleanName = name.trim().take(24)
+                if (cleanName.isEmpty()) continue
+                val gid = existing[cleanName]?.id
+                    ?: created[cleanName]
+                    ?: run {
+                        val id = groupDao.insert(TaskGroup(name = cleanName, createdAt = System.currentTimeMillis()))
+                        created[cleanName] = id
+                        newGroups++
+                        id
+                    }
+                var sort = itemDao.countInGroup(gid).toLong()
+                for (title in items.take(20)) {
+                    val t = title.trim().take(30)
+                    if (t.isEmpty()) continue
+                    itemDao.insert(
+                        TaskItem(groupId = gid, title = t, sort = sort, createdAt = System.currentTimeMillis())
+                    )
+                    sort++
+                    newItems++
+                }
+            }
+            launch(Dispatchers.Main) { onDone(newGroups, newItems) }
+        }
     }
 
     fun addGroup(name: String) {
@@ -222,12 +270,70 @@ class PhotoViewModel(app: Application) : ViewModel() {
     }
 }
 
+/** 一条聊天消息：role "user" / "assistant" */
+class ChatMessage(val role: String, val text: String)
+
+/**
+ * AI 陪伴助手：人设（用户自定义名字）+ 近期对话上下文 + 本月支出聚合统计（只发数字，不发明细）。
+ * 历史仅保留在内存（本次会话），不出网存档。
+ */
+class ChatViewModel(app: Application) : ViewModel() {
+    private val appRef = app
+    private val recordDao = (app as LifePocketApp).database.recordDao()
+
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val messages: StateFlow<List<ChatMessage>> = _messages
+
+    val personaName: String get() = AiSettings.name(appRef)
+    private var busy = false
+
+    fun send(text: String) {
+        val clean = text.trim()
+        if (busy || clean.isEmpty()) return
+        busy = true
+        _messages.value = _messages.value + ChatMessage("user", clean)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val persona = "你是「${AiSettings.name(appRef)}」，用户的私人随身助手。" +
+                    "性格温暖、会倾听、观察细腻、偶尔带一点轻幽默，说话简短自然（一般不超过三句），像老朋友一样。" +
+                    "可以适当用 emoji。用户会跟你聊生活和记账；涉及钱的话题只能基于给你的聚合统计，不要编造明细。" +
+                    "如果用户情绪低落，先共情再鼓励，不敷衍；遇到明显的极端情绪表达，温和地建议寻求身边人或专业帮助。"
+                val history = _messages.value.dropLast(1).takeLast(16)
+                    .joinToString("\n") { "${if (it.role == "user") "用户" else "你"}：${it.text.take(120)}" }
+                val stats = buildStatsLine()
+                val system = buildString {
+                    append(persona)
+                    if (stats.isNotBlank()) append("\n\n[用户记账聚合统计，仅供自然聊天，不外传] ").append(stats)
+                    if (history.isNotBlank()) append("\n\n[最近的对话]\n").append(history)
+                }
+                val reply = LlmClient.chat(appRef, system, clean, temperature = 0.7)
+                _messages.value = _messages.value + ChatMessage("assistant", reply)
+            } catch (e: Exception) {
+                _messages.value = _messages.value +
+                    ChatMessage("assistant", "（出了点小状况：${e.message?.take(80) ?: "未知错误"}，稍后再试试）")
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    /** 只输出聚合数字（本月支出总额），明细永不进入 Prompt */
+    private suspend fun buildStatsLine(): String = try {
+        val range = LpMonth.now().epochRange()
+        val expense = recordDao.sumBetween(0, range.first, range.last).first()
+        if (expense > 0) "本月支出合计 ¥${Money.yuan(expense)}" else ""
+    } catch (_: Exception) {
+        ""
+    }
+}
+
 class AppVmFactory(private val app: LifePocketApp) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T = when (modelClass) {
         RecordViewModel::class.java -> RecordViewModel(app) as T
         TaskViewModel::class.java -> TaskViewModel(app) as T
         PhotoViewModel::class.java -> PhotoViewModel(app) as T
+        ChatViewModel::class.java -> ChatViewModel(app) as T
         else -> throw IllegalArgumentException("Unknown ViewModel: $modelClass")
     }
 }

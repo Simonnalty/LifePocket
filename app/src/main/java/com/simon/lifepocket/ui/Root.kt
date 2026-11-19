@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.simon.lifepocket.LifePocketApp
+import com.simon.lifepocket.ui.chat.ChatScreen
 import com.simon.lifepocket.ui.home.HomeScreen
 import com.simon.lifepocket.ui.record.RecordScreen
 import com.simon.lifepocket.ui.settings.SettingsScreen
@@ -43,6 +44,7 @@ import com.simon.lifepocket.vm.AppVmFactory
 private val TABS = listOf(
     "home" to "家",
     "record" to "账",
+    "chat" to "聊",
 )
 
 @Composable
@@ -52,7 +54,7 @@ fun Root() {
     val factory = remember { AppVmFactory(app) }
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route ?: "home"
-    val showBar = route == "home" || route == "record"
+    val showBar = route == "home" || route == "record" || route == "chat"
 
     Scaffold(
         containerColor = Paper,
@@ -134,6 +136,9 @@ fun Root() {
                     vm = viewModel(factory = factory),
                     onOpenSettings = { nav.navigate("settings") },
                 )
+            }
+            composable("chat") {
+                ChatScreen(vm = viewModel(factory = factory))
             }
             composable("settings") {
                 SettingsScreen(

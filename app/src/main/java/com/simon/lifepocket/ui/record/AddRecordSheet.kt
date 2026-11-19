@@ -28,10 +28,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -49,8 +51,16 @@ import com.simon.lifepocket.ui.theme.Ink
 import com.simon.lifepocket.ui.theme.Paper
 import com.simon.lifepocket.ui.theme.Seal
 import com.simon.lifepocket.ui.theme.SubInk
+import com.simon.lifepocket.util.AiSettings
+import com.simon.lifepocket.util.LlmClient
 import com.simon.lifepocket.vm.RecordViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import kotlin.math.roundToLong
+import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -65,6 +75,12 @@ fun AddRecordSheet(vm: RecordViewModel, onDismiss: () -> Unit) {
     var customText by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var aiInput by remember { mutableStateOf("") }
+    var aiBusy by remember { mutableStateOf(false) }
+    var aiMsg by remember { mutableStateOf("") }
+
     LaunchedEffect(categories) {
         if (!catReady && categories.isNotEmpty()) {
             catId = categories.firstOrNull { it.id == vm.lastCatId() }?.id ?: categories.first().id
@@ -73,6 +89,54 @@ fun AddRecordSheet(vm: RecordViewModel, onDismiss: () -> Unit) {
     }
 
     val subs = if (catReady && catId > 0) vm.subsFor(catId).collectAsStateWithLifecycle(initialValue = emptyList()).value else emptyList()
+
+    // 一句话 → LLM 抽取 → 回填表单（用户确认后才保存）
+    fun aiParse() {
+        val sentence = aiInput.trim()
+        if (sentence.isEmpty() || aiBusy) return
+        aiBusy = true
+        aiMsg = ""
+        scope.launch(Dispatchers.IO) {
+            try {
+                val cats = vm.categories.first()
+                val catList = cats.joinToString("、") { it.name }
+                val sys = "你是记账解析器。从用户这句话里抽取一笔账，只输出一个 JSON 对象，不要解释、不要多余文字。\n" +
+                    "格式：{\"type\":0,\"amount_yuan\":12.5,\"category\":\"吃\",\"sub\":\"午饭\",\"note\":\"简短备注\"}\n" +
+                    "type：0=支出，1=收入；amount_yuan：数字（元，可带小数）；\n" +
+                    "category：必须从这些大类里选一个：" + catList + "；实在不属于任何一类就选\"" +
+                    (cats.firstOrNull()?.name ?: "其他") + "\"；\n" +
+                    "sub：小类，从原话提炼（如 午饭、奶茶、打车），没有就空字符串；note：不超过15字的简短备注，没有就空字符串。\n" +
+                    "今天日期：" + LocalDate.now()
+                val raw = LlmClient.chat(context, sys, sentence)
+                val j = JSONObject(LlmClient.stripFence(raw))
+                val t = if (j.optInt("type", 0) == 1) 1 else 0
+                val yuan = j.optDouble("amount_yuan", 0.0)
+                val catName = j.optString("category", "").trim()
+                val sub = j.optString("sub", "").trim()
+                val aiNote = j.optString("note", "").trim()
+                withContext(Dispatchers.Main) {
+                    type = t
+                    amountText = if (yuan > 0) String.format("%.2f", yuan).trimEnd('0').trimEnd('.') else ""
+                    cats.firstOrNull { it.name == catName }?.let { c ->
+                        catId = c.id
+                        catReady = true
+                        subSel = ""
+                        if (sub.isNotBlank()) {
+                            vm.addSubIfNeeded(c.id, sub.take(12))
+                            subSel = sub.take(12)
+                        }
+                    }
+                    note = (if (aiNote.isNotBlank()) aiNote else sentence).take(30)
+                    aiMsg = "已解析 ✓ 检查无误后点「保存」"
+                    aiInput = ""
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { aiMsg = "解析失败：${e.message?.take(60) ?: "未知错误"}" }
+            } finally {
+                withContext(Dispatchers.Main) { aiBusy = false }
+            }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -89,6 +153,70 @@ fun AddRecordSheet(vm: RecordViewModel, onDismiss: () -> Unit) {
                 Text("记一笔", fontSize = 19.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Serif, letterSpacing = 4.sp, color = Ink)
                 Spacer(Modifier.weight(1f))
                 Text("收起", fontSize = 13.sp, color = SubInk, modifier = Modifier.clickable { onDismiss() })
+            }
+
+            // ---- AI 帮我记：一句话 → 自动填好类型/金额/大类/小类/备注，确认后保存 ----
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("AI 帮我记", fontSize = 12.5.sp, letterSpacing = 5.sp, color = SubInk)
+                Spacer(Modifier.weight(1f))
+                if (!AiSettings.ready(context)) {
+                    Text(
+                        "到设置开启 AI",
+                        fontSize = 12.sp,
+                        color = Seal,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onDismiss() },
+                    )
+                }
+            }
+            if (AiSettings.ready(context)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BasicTextField(
+                        value = aiInput,
+                        onValueChange = { aiInput = it.take(60) },
+                        textStyle = TextStyle(fontSize = 13.5.sp, color = Ink),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(CardWhite)
+                            .border(1.dp, Hairline)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        cursorBrush = SolidColor(Seal),
+                    )
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (aiInput.isNotBlank() && !aiBusy) Ink else Hairline)
+                            .clickable(enabled = aiInput.isNotBlank() && !aiBusy) { aiParse() }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                    ) {
+                        Text(
+                            if (aiBusy) "解析中…" else "解析",
+                            fontSize = 13.sp,
+                            color = if (aiInput.isNotBlank() && !aiBusy) Paper else SubInk,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                if (aiMsg.isNotEmpty()) {
+                    Text(
+                        aiMsg,
+                        fontSize = 12.sp,
+                        color = if (aiMsg.startsWith("已解析")) Seal else SubInk,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
             }
 
             Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(26.dp)) {

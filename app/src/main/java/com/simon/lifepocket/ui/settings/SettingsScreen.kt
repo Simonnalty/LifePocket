@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,8 +32,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,6 +44,7 @@ import com.simon.lifepocket.ui.theme.Hairline
 import com.simon.lifepocket.ui.theme.Ink
 import com.simon.lifepocket.ui.theme.Seal
 import com.simon.lifepocket.ui.theme.SubInk
+import com.simon.lifepocket.util.AiSettings
 import com.simon.lifepocket.vm.RecordViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -106,10 +111,73 @@ fun SettingsScreen(vm: RecordViewModel, onBack: () -> Unit) {
                 .padding(14.dp)
         ) {
             Text(
-                "隐私：本应用不申请任何网络权限，所有数据只保存在你的手机上。你可以在「应用信息 → 权限」里验证。",
+                "隐私：数据全部只保存在手机本地（Room 数据库）。应用默认不联网；" +
+                    "仅当你开启下方「AI 助手」后，才会把你输入的那句话发送给所选模型服务商——" +
+                    "账目明细、照片、任务库永不通过网络传输。可在「应用信息 → 权限」里查看。",
                 fontSize = 12.5.sp,
                 color = SubInk,
                 lineHeight = 20.sp,
+            )
+        }
+
+        SectionLabel("AI 助手（实验）")
+        var aiOn by remember { mutableStateOf(AiSettings.enabled(context)) }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable {
+                    aiOn = !aiOn
+                    AiSettings.setEnabled(context, aiOn)
+                }
+                .padding(vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("启用 AI（默认关闭）", fontSize = 16.sp, color = Ink)
+                Text(
+                    "GLM-4-Flash 长期免费 · 可换豆包等 OpenAI 兼容服务",
+                    fontSize = 12.5.sp,
+                    color = SubInk,
+                    modifier = Modifier.padding(top = 3.dp),
+                )
+            }
+            Text(
+                if (aiOn) "已开启" else "已关闭",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (aiOn) Seal else SubInk,
+            )
+        }
+        if (aiOn) {
+            var aiName by remember { mutableStateOf(AiSettings.name(context)) }
+            var aiKey by remember { mutableStateOf(AiSettings.apiKey(context)) }
+            var aiUrl by remember { mutableStateOf(AiSettings.baseUrl(context)) }
+            var aiModel by remember { mutableStateOf(AiSettings.model(context)) }
+            AiField("给 TA 起名（如：澄澄）", aiName) { aiName = it; AiSettings.setName(context, it) }
+            AiField("API Key（open.bigmodel.cn 注册免费获取）", aiKey, isKey = true) {
+                aiKey = it; AiSettings.setApiKey(context, it)
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(Modifier.weight(1f)) {
+                    AiField("接口地址（高级）", aiUrl, compact = true) {
+                        aiUrl = it; AiSettings.setBaseUrl(context, it)
+                    }
+                }
+                Box(Modifier.weight(1f)) {
+                    AiField("模型名（如 glm-4-flash）", aiModel, compact = true) {
+                        aiModel = it; AiSettings.setModel(context, it)
+                    }
+                }
+            }
+            Text(
+                "隐私：只发送你输入的句子与分类名称；账目明细、照片、任务库不出网；Key 只存在本机。",
+                fontSize = 12.sp,
+                color = SubInk,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
             )
         }
 
@@ -152,7 +220,7 @@ fun SettingsScreen(vm: RecordViewModel, onBack: () -> Unit) {
         }
 
         SectionLabel("关于")
-        AboutRow("版本", "1.0.0")
+        AboutRow("版本", "1.3.0")
         AboutRow("开源协议", "MIT License（源码见仓库）")
         AboutRow("设计", "「白 · 手账」· huashu-design 三方向选定")
         AboutRow("致谢", "BeeCount / Veri Fin / Taskfern 等开源项目")
@@ -207,6 +275,32 @@ fun SettingsScreen(vm: RecordViewModel, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { showAddCat = false }) { Text("取消") } },
         )
     }
+}
+
+@Composable
+private fun AiField(
+    label: String,
+    value: String,
+    isKey: Boolean = false,
+    compact: Boolean = false,
+    onChange: (String) -> Unit,
+) {
+    Text(label, fontSize = 12.5.sp, color = SubInk, modifier = Modifier.padding(top = 12.dp))
+    TextField(
+        value = value,
+        onValueChange = onChange,
+        singleLine = true,
+        textStyle = TextStyle(fontSize = if (compact) 12.5.sp else 13.5.sp, color = Ink),
+        visualTransformation = if (isKey) PasswordVisualTransformation() else VisualTransformation.None,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            focusedIndicatorColor = Ink,
+            unfocusedIndicatorColor = Hairline,
+            cursorColor = Seal,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
